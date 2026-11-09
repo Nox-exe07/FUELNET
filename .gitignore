@@ -1,0 +1,17 @@
+venv/
+.venv/
+node_modules/
+catboost_v3_bundle/
+prepared_dataset/
+prepared_data/
+models_artifacts/
+__pycache__/
+*.zip
+*.pkl
+*.pt
+*.cbm
+*.pyd
+*.dll
+*.lib
+*.node
+*.pdb

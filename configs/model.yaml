@@ -1,0 +1,8 @@
+model_version: "fuelnet-t-v1.0.0"
+dataset: "Kaggle ahmettyilmazz/fuel-consumption"
+targets:
+  - fuel_city_l_100km
+  - fuel_hwy_l_100km
+  - fuel_comb_l_100km
+  - co2_g_km
+notes: "Predictions are for Canadian NRCan test cycle conditions. Unseen makes/models use unknown embedding."

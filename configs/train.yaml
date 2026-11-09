@@ -1,0 +1,28 @@
+# Training hyperparameters for FuelNet
+seed: 42
+batch_size: 256
+fallback_batch_size: 128
+epochs: 200
+early_stopping_patience: 15
+optimizer:
+  name: adamw
+  lr: 0.001
+  weight_decay: 0.0001
+scheduler: cosine
+loss: huber  # smooth_l1
+device: auto  # cuda if available else cpu
+num_workers: 0
+
+# Data split
+temporal_test_years: [2021, 2022]
+group_kfold_splits: 5
+group_col: make_model
+
+# Model
+embedding:
+  make_dim: 32
+  model_dim: 64
+fusion_dim: 256
+residual_blocks: 4
+dropout: 0.1
+output_dim: 4

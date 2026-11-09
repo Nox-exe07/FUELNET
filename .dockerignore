@@ -1,0 +1,34 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# VCS / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Local env
+.env
+.env.local
+
+# Frontend (built by its own Dockerfile/context)
+frontend/
+
+# Data / notebooks / archives not needed for serving
+data/
+notebooks/
+tests/
+models_artifacts/
+*.ipynb
+*.zip
+catboost_v3_bundle.zip
+prepared_dataset.zip
+
+# Logs / temp
+*.log
