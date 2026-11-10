@@ -1,14 +1,21 @@
-"""FuelNet CatBoost API — wired to catboost_v3_bundle/catboost.pt (57 features)"""
+"""FuelNet CatBoost API — wired to catboost_v3_bundle/catboost.cbm (57 features)"""
+import os
 import pathlib
 from contextlib import asynccontextmanager
 from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.api.schemas import PredictRequest, PredictResponse, HealthResponse, ExplainResponse
 from src.api.catboost_predictor import CatBoostLoader
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]
+
+_FRONTEND_DIST_ENV = os.getenv("FRONTEND_DIST")
+FRONTEND_DIST = pathlib.Path(_FRONTEND_DIST_ENV) if _FRONTEND_DIST_ENV else PROJECT_ROOT / "frontend" / "dist"
+if not FRONTEND_DIST.is_absolute():
+    FRONTEND_DIST = PROJECT_ROOT / FRONTEND_DIST
 
 loader: CatBoostLoader = None
 
@@ -37,7 +44,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -142,6 +149,10 @@ def explain(req: PredictRequest):
 @app.post("/explain_single", include_in_schema=False)
 def explain_alias(req: PredictRequest):
     return explain(req)
+
+if FRONTEND_DIST.is_dir() and (FRONTEND_DIST / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")
+    print(f"[FuelNet] Serving built frontend from {FRONTEND_DIST}")
 
 if __name__ == "__main__":
     import uvicorn

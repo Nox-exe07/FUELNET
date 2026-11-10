@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Restore model from cache
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: catboost_v3_bundle/catboost.cbm
+          key: fuelnet-model-${{ hashFiles('catboost_v3_bundle/model.sha256') }}
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-test.txt
+
+      - name: Download model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: python scripts/fetch_model.py
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build

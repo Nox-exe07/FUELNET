@@ -3,24 +3,84 @@
 Predict passenger-vehicle CO2 emissions (g/km) and derived fuel consumption (L/100 km) from a
 CatBoost model trained on Canadian, US, EPA and Indian laboratory/road-cycle data.
 
-The flagship deliverable is a working end-to-end stack: **trained model → FastAPI → React dashboard**.
+The deliverable is a working end-to-end stack: **trained model → FastAPI → React dashboard**.
 
-> Status: complete and runnable locally. Automated tests, Docker packaging and documentation are included.
+> The repository is code-only. The 100.8 MiB CatBoost model is a GitHub Release asset and is
+> downloaded automatically on first run. That keeps `git clone` small while making the app fully
+> runnable from a fresh checkout.
+
+---
+
+## Quick start (Windows)
+
+```bat
+scripts\run_demo.bat
+```
+
+This will:
+
+1. create `venv` if needed,
+2. install the slim serving dependencies,
+3. download and verify `catboost.cbm` if it is missing,
+4. start the API and the prebuilt React UI on **http://127.0.0.1:8000**.
+
+The browser opens automatically. Close the `FuelNet Server` window to stop it.
+
+### Manual start
+
+```bat
+python -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements-api.txt
+venv\Scripts\python.exe scripts\fetch_model.py
+venv\Scripts\python.exe -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+```
+
+Open http://127.0.0.1:8000 for the dashboard and http://127.0.0.1:8000/docs for the API docs.
+
+On Linux/macOS:
+
+```bash
+scripts/run_demo.sh
+```
+
+Or manually:
+
+```bash
+python3 -m venv venv
+venv/bin/python -m pip install -r requirements-api.txt
+venv/bin/python scripts/fetch_model.py
+venv/bin/python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
+```
+
+---
+
+## Model download
+
+The model is not stored in normal git history because GitHub rejects files above 100 MiB.
+
+| Item | Value |
+|---|---|
+| Release | `v1.0-demo` |
+| Asset | `catboost.cbm` |
+| Size | 100.8 MiB (105,714,880 bytes) |
+| SHA-256 | `b9f91f3879a7d087ef4ae516e5e9c60a5fcef11a59f5233c38ef97a5cb055fa6` |
+| URL | https://github.com/Nox-exe07/FUELNET/releases/download/v1.0-demo/catboost.cbm |
+
+`scripts/fetch_model.py` downloads to `catboost_v3_bundle/catboost.cbm` and verifies the checksum.
+If the download is unavailable, download the asset manually from the release page and place it at that
+path.
 
 ---
 
 ## Canonical model: CatBoost v3
 
-Two model families live in this repository. The API and frontend serve **CatBoost v3** because it has the
-best accuracy and the broadest training data.
-
 | Property | CatBoost v3 (served) |
 |---|---|
-| Artifact | `catboost_v3_bundle/catboost.pt` (also `.cbm`) |
+| Artifact | `catboost_v3_bundle/catboost.cbm` |
 | Target | `co2_g_per_km`, trained on `log1p` and inverted with `expm1` |
 | Features | 57 engineered features (year, engine, cylinders, transmission, target encodings, aggregates/flags) |
-| Training data | India + Global + Canada (1995–2024) + EPA — 87,369 rows in the training distribution |
-| Trees / depth | 24,998 iterations, depth 8 |
+| Training data | India + Global + Canada (1995–2024) + EPA — 87,369 training rows |
+| Trees / depth | 24,999 stored trees (`best_iteration` 24,998), depth 8 |
 | Overall test R² | **0.887** (MAE 22.2, RMSE 44.9, MedAE 10.4) |
 | Validation R² | 0.891 |
 
@@ -39,161 +99,139 @@ best accuracy and the broadest training data.
 
 ### Derived fuel values
 
-The served model predicts **CO₂ only**. Fuel is derived with `fuel_combined = CO2 × 0.04310` (~2,320 g CO₂/L),
-and the city/highway split uses median ratios measured from `data/Fuel_Consumption_2000-2022.csv`
-(`city ≈ 1.157 × combined`, `highway ≈ 0.808 × combined`), with constants as fallback.
+The served model predicts **CO₂ only**. Fuel is derived with `fuel_combined = CO2 × 0.04310`
+(~2,320 g CO₂/L), and the city/highway split uses median ratios measured from
+`data/Fuel_Consumption_2000-2022.csv` (`city ≈ 1.157 × combined`, `highway ≈ 0.808 × combined`),
+with constants as fallback.
 
 ### Uncertainty
 
 `/predict` returns residual-based standard deviations computed from the held-out
-`catboost_v3_bundle/test_predictions.csv`: a per-source value when known, otherwise India / non-India / global.
-Unseen vehicles are inflated by 10%.
-
----
-
-## Legacy model: FuelNet (PyTorch)
-
-The original 4-target residual MLP is still present for reference:
-
-- `src/models/fuelnet.py`, `src/models/train.py`, `src/models/export.py`
-- `models_artifacts/` (`fuelnet_best.pt`, `fuelnet_ts.pt`, `preprocessor.pkl`, `target_scaler.pkl`, `model_card.json`)
-- Canada-only (2000–2022), test R² 0.88 (CO₂), 0.89 (combined fuel), 0.90 (city), 0.83 (highway)
-- Legacy adapters: `src/api/predictor.py`, `src/api/main_fuelnet_backup.py`, `src/evaluation/explain.py`
-
-These are **not wired into the running API**. They are kept as a documented alternative and for the SHAP
-analysis (`models_artifacts/shap_summary.png`).
+`catboost_v3_bundle/test_predictions.csv`: a per-source value when known, otherwise India / non-India /
+global. Unseen vehicles are inflated by 10%.
 
 ---
 
 ## Architecture
 
-```
-                 ┌──────────────────────────────┐
-                 │  raw vehicle / trip inputs   │
-                 └──────────────┬───────────────┘
-                                │
-                   ┌────────────▼────────────┐
-                   │ src/api/schemas.py      │  Pydantic validation
-                   └────────────┬────────────┘
-                                │
-             ┌──────────────────▼──────────────────┐
-             │ src/api/catboost_predictor.py       │
-             │ 57-feature engineering, TE lookups, │
-             │ median imputation, SHAP, uncertainty│
-             └──────────────────┬──────────────────┘
-                                │
-          ┌─────────────────────┼─────────────────────┐
-          │                     │                     │
-   ┌──────▼──────┐      ┌───────▼───────┐     ┌───────▼───────┐
-   │ /predict    │      │ /batch-predict│     │ /explain      │
-   │ CO2 + fuel  │      │  ≤ 500 rows   │     │ CatBoost SHAP │
-   └──────┬──────┘      └───────┬───────┘     └───────┬───────┘
-          └─────────────────────┼─────────────────────┘
-                                │  FastAPI (src/api/main.py)
-                   ┌────────────▼────────────┐
-                   │ frontend/ React + Vite  │
-                   │ Single / Compare / Batch│
-                   │ / Road-check simulator  │
-                   └─────────────────────────┘
+```text
+raw vehicle / trip inputs
+        │
+        ▼
+src/api/schemas.py          Pydantic validation
+        │
+        ▼
+src/api/catboost_predictor.py
+57-feature engineering, target encodings,
+median imputation, SHAP, uncertainty
+        │
+        ├── /predict          CO2 + derived fuel
+        ├── /batch-predict    ≤ 500 rows
+        └── /explain          CatBoost TreeSHAP
+        │
+        ▼
+FastAPI (src/api/main.py) ── serves frontend/dist (React 19 + Vite)
 ```
 
 ---
 
 ## Project structure
 
-```
+```text
 fuelnet/
-├── data/                      # Fuel_Consumption_2000-2022.csv (gitignored)
-├── notebooks/                 # 01_eda.ipynb (+ executed copy)
+├── data/                      # Fuel_Consumption_2000-2022.csv (tracked)
+├── notebooks/                 # EDA notebooks
 ├── src/
-│   ├── data/                  # preprocess.py, dataset.py (FuelNet pipeline)
-│   ├── models/                # fuelnet.py, train.py, baselines.py, export.py (legacy)
-│   ├── api/                   # main.py, schemas.py, catboost_predictor.py (+ legacy predictor.py)
-│   └── evaluation/            # explain.py (FuelNet SHAP, legacy)
-├── frontend/                  # React 19 + Vite 8 + TypeScript + recharts
-│   ├── nginx.conf             # production proxy to the API
+│   ├── data/                  # preprocess.py, dataset.py
+│   ├── models/                # FuelNet legacy PyTorch model/training code
+│   ├── api/                   # main.py, schemas.py, catboost_predictor.py
+│   └── evaluation/            # legacy explain.py
+├── frontend/                  # React 19 + Vite 8 + TypeScript + Recharts
+│   ├── dist/                  # prebuilt static UI (committed for one-click demo)
+│   ├── nginx.conf             # optional two-service Docker proxy
 │   └── Dockerfile
-├── catboost_v3_bundle/        # catboost.pt/.cbm, metadata, TE mappings, metrics, test predictions
-├── prepared_dataset/prepared_data/  # feature_cols.json, feature_median.pkl, y_train_orig.npy, ...
-├── models_artifacts/          # legacy FuelNet artifacts (gitignored)
+├── catboost_v3_bundle/        # small artifacts; catboost.cbm downloaded separately
+├── prepared_dataset/prepared_data/  # feature_cols.json, feature_median.pkl, y_train_orig.npy
+├── models_artifacts/          # legacy FuelNet artifacts (not tracked)
 ├── configs/                   # train.yaml, model.yaml
-├── tests/                     # pytest suite (schemas, predictor, API)
-├── scripts/                   # run_local.bat, run_tests.bat
-├── Dockerfile                 # API image
-├── docker-compose.yml         # api + web
+├── tests/                     # pytest suite
+├── scripts/
+│   ├── fetch_model.py         # download + SHA-256 verification
+│   ├── run_demo.bat           # one-click Windows demo
+│   ├── run_demo.sh            # one-click Linux/macOS demo
+│   ├── run_local.bat          # two-terminal development mode
+│   └── run_tests.bat
+├── Dockerfile                 # single-container API + built UI
+├── docker-compose.yml         # one service on :8000
 ├── requirements.txt           # full dev/training environment
 ├── requirements-api.txt       # slim serving environment
 └── pytest.ini
 ```
 
+### What is committed vs downloaded
+
+| Committed | Downloaded at first run |
+|---|---|
+| `metadata.json`, `te_mappings.json`, metrics CSVs | `catboost_v3_bundle/catboost.cbm` |
+| `feature_cols.json`, `feature_median.pkl`, `y_train_orig.npy` | |
+| `test_predictions.csv`, `per_source.csv` | |
+| `data/Fuel_Consumption_2000-2022.csv` | |
+| `frontend/dist/` | |
+
+Large training arrays (`X_train_*.pkl`, `X_test_raw.pkl`, `full_dataset.pkl`) are not needed for serving
+and are not shipped.
+
 ---
 
-## Setup
+## Environment variables
 
-### Prerequisites
-- Python 3.11+ (tested on 3.13)
-- Node.js 18+ (tested on 24)
-- Optional: Docker Desktop / Docker Engine + Compose
-
-### 1. Python environment
-
-```bat
-python -m venv venv
-venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-### 2. Environment variables
-
-```bat
-copy .env.example .env
-```
+Copy `.env.example` to `.env` if you want to override defaults. Do not commit `.env`.
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `FUEL_PRICE` | `1.50` | USD/L used for annual cost math |
 | `CATBOOST_BUNDLE_DIR` | `catboost_v3_bundle` | model/artifact directory |
 | `PREPARED_DATA_DIR` | `prepared_dataset/prepared_data` | medians + feature list |
+| `FRONTEND_DIST` | `frontend/dist` | built React UI served by FastAPI |
 | `EXPLAIN_SHAP_TREES` | `3000` | trees used for SHAP; `0` = exact over all 24,999 (slow) |
-
-### 3. Frontend
-
-```bat
-cd frontend
-npm install
-```
+| `MODEL_URL` | release asset URL | override the model download URL |
+| `MODEL_SHA256` | hash in `model.sha256` | expected model checksum |
 
 ---
 
-## Run locally
+## Development mode
 
-One command (opens two terminals):
+For live frontend editing, use the two-terminal launcher:
 
 ```bat
 scripts\run_local.bat
 ```
 
-Manual:
+- API: http://127.0.0.1:8000
+- Vite dev UI: http://127.0.0.1:5173
+- Vite proxies `/predict`, `/batch-predict`, `/explain`, `/options`, `/model`, `/health` to port 8000.
+
+To rebuild the committed UI:
 
 ```bat
-:: terminal 1 — API
-venv\Scripts\python.exe -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
-
-:: terminal 2 — web UI
 cd frontend
-npm run dev
+npm install
+npm run build
 ```
-
-- API docs: http://127.0.0.1:8000/docs
-- Web UI: http://127.0.0.1:5173
-- Vite proxies `/predict`, `/batch-predict`, `/explain`, `/options`, `/model`, `/health` to port 8000.
 
 ---
 
 ## Tests
 
 ```bat
+venv\Scripts\python.exe -m pip install -r requirements-test.txt
+venv\Scripts\python.exe scripts\fetch_model.py
 venv\Scripts\python.exe -m pytest -q
-:: or
+```
+
+or:
+
+```bat
 scripts\run_tests.bat
 ```
 
@@ -205,18 +243,34 @@ prediction sanity, fuel-split ratios, uncertainty, batch consistency, SHAP outpu
 
 ## Docker
 
+The root `Dockerfile` is a single container: it builds the React UI, installs the slim API dependencies,
+downloads the model from the GitHub Release, and serves everything on port 8000.
+
 ```bat
 docker compose up --build
 ```
 
-- API: http://127.0.0.1:8000
-- Web: http://127.0.0.1:8080 (nginx proxies API calls to the `api` service)
+Open http://127.0.0.1:8000.
 
-The API image uses the slim `requirements-api.txt`; the full `requirements.txt` is for training/notebooks.
-`catboost.cbm` is ~100 MB, so keep `.dockerignore` in place to avoid bloating the build context.
+To use a different model mirror:
 
-> Docker was not installed on the development machine used to build this project, so the images were
-> authored and configured but not built here. Compose file and Dockerfiles are ready to run where Docker exists.
+```bat
+set MODEL_URL=https://example.com/catboost.cbm
+docker compose up --build
+```
+
+---
+
+## Public demo
+
+The same container can be deployed to a Hugging Face Docker Space. See
+[`deploy/hf-space/README.md`](deploy/hf-space/README.md) for the Space metadata and deployment steps.
+
+For a temporary public URL from a local machine, a tunnel can be used:
+
+```bat
+cloudflared tunnel --url http://127.0.0.1:8000
+```
 
 ---
 
@@ -279,8 +333,7 @@ over all trees (~20 s).
 - Years 2000–2022, Canadian laboratory cycle; the CatBoost bundle additionally uses EPA, India and global data
 - FuelNet targets: `fuel_city_l_100km`, `fuel_hwy_l_100km`, `fuel_comb_l_100km`, `co2_g_km`
 
-Place the Canadian CSV at `data/Fuel_Consumption_2000-2022.csv` to enable measured fuel-split ratios
-(optional; constants are used otherwise).
+The Canadian CSV at `data/Fuel_Consumption_2000-2022.csv` enables measured fuel-split ratios.
 
 ---
 
@@ -291,6 +344,12 @@ Place the Canadian CSV at `data/Fuel_Consumption_2000-2022.csv` to enable measur
 - Laboratory-cycle predictions, not real-world driving.
 - Unseen makes/models fall back to smoothed global target encodings and are flagged.
 - Explanations use a tree-limited SHAP approximation by default (see `EXPLAIN_SHAP_TREES`).
+
+## Legacy model: FuelNet (PyTorch)
+
+The original 4-target residual MLP is still present for reference in `src/models/` and
+`models_artifacts/` (not tracked). It is **not wired into the running API**. It remains a documented
+alternative and the source of the legacy SHAP analysis.
 
 ## License
 

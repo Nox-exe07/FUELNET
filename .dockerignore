@@ -18,10 +18,12 @@ __pycache__/
 .env.local
 
 # Frontend (built by its own Dockerfile/context)
-frontend/
+frontend/node_modules/
+frontend/.vite/
 
 # Data / notebooks / archives not needed for serving
-data/
+data/*
+!data/Fuel_Consumption_2000-2022.csv
 notebooks/
 tests/
 models_artifacts/
@@ -29,6 +31,14 @@ models_artifacts/
 *.zip
 catboost_v3_bundle.zip
 prepared_dataset.zip
+
+# Large artifacts excluded from build context; model is downloaded in the image
+catboost_v3_bundle/catboost.pt
+catboost_v3_bundle/catboost.cbm
+prepared_dataset/prepared_data/*
+!prepared_dataset/prepared_data/feature_cols.json
+!prepared_dataset/prepared_data/feature_median.pkl
+!prepared_dataset/prepared_data/y_train_orig.npy
 
 # Logs / temp
 *.log

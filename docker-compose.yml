@@ -1,25 +1,17 @@
 services:
-  api:
+  fuelnet:
     build:
       context: .
       dockerfile: Dockerfile
-    image: fuelnet-api:latest
+      args:
+        MODEL_URL: "${MODEL_URL:-https://github.com/Nox-exe07/FUELNET/releases/download/v1.0-demo/catboost.cbm}"
+    image: fuelnet:latest
     ports:
       - "8000:8000"
     environment:
       FUEL_PRICE: "${FUEL_PRICE:-1.50}"
       CATBOOST_BUNDLE_DIR: catboost_v3_bundle
       PREPARED_DATA_DIR: prepared_dataset/prepared_data
+      FRONTEND_DIST: frontend/dist
       EXPLAIN_SHAP_TREES: "${EXPLAIN_SHAP_TREES:-3000}"
-    restart: unless-stopped
-
-  web:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: fuelnet-web:latest
-    ports:
-      - "8080:80"
-    depends_on:
-      - api
     restart: unless-stopped

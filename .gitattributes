@@ -1,0 +1,7 @@
+* text=auto
+*.bat text eol=crlf
+*.sh text eol=lf
+*.cbm binary
+*.pt binary
+*.pkl binary
+*.npy binary
