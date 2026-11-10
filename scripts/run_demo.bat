@@ -74,12 +74,9 @@ if not errorlevel 1 (
 )
 
 echo [FuelNet] Starting FuelNet at http://127.0.0.1:8000 ...
-start "FuelNet Server" cmd /k "%VPY% -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000"
-
-echo [FuelNet] Waiting for the server to start...
-timeout /t 5 /nobreak >nul
-start "" http://127.0.0.1:8000
-echo [FuelNet] The browser should open shortly. Close the "FuelNet Server" window to stop.
+echo [FuelNet] The browser will open once the model is ready. Press Ctrl+C or close this window to stop.
+start "" powershell -NoProfile -WindowStyle Hidden -Command "for ($i=0; $i -lt 90; $i++) { try { Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8000/health' -TimeoutSec 2 | Out-Null; Start-Process 'http://127.0.0.1:8000'; break } catch { Start-Sleep -Seconds 2 } }"
+%VPY% -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 goto :done
 
 :error

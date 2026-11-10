@@ -1,5 +1,8 @@
 # FuelNet — Fuel Consumption & CO2 Emission Prediction Platform
 
+[![CI](https://github.com/Nox-exe07/FUELNET/actions/workflows/ci.yml/badge.svg)](https://github.com/Nox-exe07/FUELNET/actions/workflows/ci.yml)
+[![Model release](https://img.shields.io/github/v/release/Nox-exe07/FUELNET?label=model)](https://github.com/Nox-exe07/FUELNET/releases/tag/v1.0-demo)
+
 Predict passenger-vehicle CO2 emissions (g/km) and derived fuel consumption (L/100 km) from a
 CatBoost model trained on Canadian, US, EPA and Indian laboratory/road-cycle data.
 
