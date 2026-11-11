@@ -266,8 +266,20 @@ docker compose up --build
 
 ## Public demo
 
-The same container can be deployed to a Hugging Face Docker Space. See
-[`deploy/hf-space/README.md`](deploy/hf-space/README.md) for the Space metadata and deployment steps.
+Live deployment: **https://nagavarundaddanala--fuelnet-web.us-east.modal.run**
+
+The Modal deployment is defined in
+[`deploy/modal/modal_app.py`](deploy/modal/modal_app.py). It builds the API
+image, downloads the verified model from the GitHub Release, and serves the
+prebuilt frontend and FastAPI endpoints.
+
+```bat
+modal deploy deploy/modal/modal_app.py
+```
+
+Hugging Face Docker Spaces require a PRO subscription on the free `cpu-basic`
+hardware, so the prepared `deploy/hf-space` files are kept only as an
+alternative for accounts with PRO.
 
 For a temporary public URL from a local machine, a tunnel can be used:
 
